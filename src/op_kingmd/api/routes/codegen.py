@@ -18,43 +18,49 @@ from op_kingmd.core.pipeline import (
 router = APIRouter()
 
 
+_MAX_CODE  = 500_000   # ~500 KB source limit
+_MAX_DESC  = 8_000
+_MAX_CTX   = 100_000
+
+
 class GenerateRequest(BaseModel):
-    description: str = Field(..., min_length=10, description="Natural language description of what to build")
+    description: str = Field(..., min_length=10, max_length=_MAX_DESC,
+                             description="Natural language description of what to build")
     language: Language = Language.SOLIDITY
     framework: Framework = Framework.FOUNDRY
     include_tests: bool = True
     include_docs: bool = True
     include_deploy_script: bool = True
     gas_optimize: bool = True
-    context: str | None = Field(None, description="Extra code context or ABI")
+    context: str | None = Field(None, max_length=_MAX_CTX, description="Extra code context or ABI")
 
     model_config = {"use_enum_values": True}
 
 
 class ReviewRequest(BaseModel):
-    code: str = Field(..., min_length=20)
+    code: str = Field(..., min_length=20, max_length=_MAX_CODE)
     language: Language = Language.SOLIDITY
 
     model_config = {"use_enum_values": True}
 
 
 class ExplainRequest(BaseModel):
-    code: str = Field(..., min_length=10)
+    code: str = Field(..., min_length=10, max_length=_MAX_CODE)
     language: Language = Language.SOLIDITY
 
     model_config = {"use_enum_values": True}
 
 
 class OptimizeRequest(BaseModel):
-    code: str = Field(..., min_length=10)
+    code: str = Field(..., min_length=10, max_length=_MAX_CODE)
     language: Language = Language.SOLIDITY
 
     model_config = {"use_enum_values": True}
 
 
 class FreeformRequest(BaseModel):
-    prompt: str = Field(..., min_length=5)
-    system: str | None = None
+    prompt: str = Field(..., min_length=5, max_length=_MAX_DESC)
+    system: str | None = Field(None, max_length=4_000)
     stream: bool = False
 
 

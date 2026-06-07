@@ -10,7 +10,6 @@ from typing import Any
 import structlog
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
 
 from op_kingmd.api.routes import audit_router, codegen_router, github_router
 from op_kingmd.core.model import ModelConfig, ModelEngine
@@ -35,6 +34,20 @@ async def lifespan(app: FastAPI):
     logger.info("shutdown")
 
 
+def _allowed_origins() -> list[str]:
+    """Read allowed origins from env; falls back to localhost-only in production."""
+    raw = os.getenv("OPKMD_CORS_ORIGINS", "")
+    if raw.strip():
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    # Safe default: only same-origin + localhost dev ports
+    return [
+        "http://localhost:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:3000",
+    ]
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Op-Kingmd API",
@@ -44,16 +57,19 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        # Disable docs in production unless explicitly enabled
+        docs_url="/docs" if os.getenv("OPKMD_ENABLE_DOCS", "1") == "1" else None,
+        redoc_url="/redoc" if os.getenv("OPKMD_ENABLE_DOCS", "1") == "1" else None,
     )
 
+    # CORS: never use wildcard with allow_credentials=True (violates CORS spec and
+    # enables cookie/credential theft). Use explicit origin list only.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=_allowed_origins(),
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "X-Api-Key"],
     )
 
     # Request timing middleware
@@ -65,16 +81,31 @@ def create_app() -> FastAPI:
         response.headers["X-Response-Time"] = f"{elapsed}ms"
         return response
 
-    app.include_router(codegen_router, prefix="/v1/codegen", tags=["Code Generation"])
-    app.include_router(audit_router, prefix="/v1/audit", tags=["Audit"])
-    app.include_router(github_router, prefix="/v1/github", tags=["GitHub"])
+    app.include_router(
+        codegen_router,
+        prefix="/v1/codegen",
+        tags=["Code Generation"],
+        dependencies=[Depends(require_api_key)],
+    )
+    app.include_router(
+        audit_router,
+        prefix="/v1/audit",
+        tags=["Audit"],
+        dependencies=[Depends(require_api_key)],
+    )
+    app.include_router(
+        github_router,
+        prefix="/v1/github",
+        tags=["GitHub"],
+        dependencies=[Depends(require_api_key)],
+    )
 
+    # Health and root are intentionally unauthenticated but return minimal info
     @app.get("/health")
     async def health():
         return {
             "status": "ok",
-            "model": os.getenv("OPKMD_MODEL_ID", "Qwen/Qwen2.5-Coder-7B-Instruct"),
-            "device": _engine.get_device() if _engine else "not_loaded",
+            "model_loaded": _engine is not None and _engine._loaded,
         }
 
     @app.get("/")
@@ -83,7 +114,6 @@ def create_app() -> FastAPI:
             "name": "Op-Kingmd",
             "version": "0.1.0",
             "description": "Web3-focused coding LLM with Audit-Before-Deploy layer",
-            "docs": "/docs",
         }
 
     return app
@@ -96,7 +126,18 @@ def get_pipeline(request: Request) -> Web3Pipeline:
     return pipeline
 
 
-def require_api_key(x_api_key: str = Header(...)):
+def require_api_key(x_api_key: str = Header(alias="X-Api-Key", default="")) -> None:
+    """Validate API key on every protected route.
+
+    If OPKMD_API_KEY is not set the server runs in open mode (dev only).
+    Log every failed attempt for brute-force detection.
+    """
     expected = os.getenv("OPKMD_API_KEY", "")
-    if expected and x_api_key != expected:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    if not expected:
+        # No key configured — open mode, warn once at startup (see lifespan)
+        return
+    # Constant-time comparison to prevent timing attacks
+    import hmac
+    if not hmac.compare_digest(x_api_key.encode(), expected.encode()):
+        logger.warning("api_key_rejected", prefix=x_api_key[:4] if x_api_key else "")
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")

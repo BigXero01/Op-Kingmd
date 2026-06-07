@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import os
+import re
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from op_kingmd.github.client import GitHubClient
 
 router = APIRouter()
 
+_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
+_QUERY_MAX = 500
+
 
 def _get_client() -> GitHubClient:
-    token = os.getenv("GITHUB_TOKEN")
-    if not token:
+    token = os.getenv("GITHUB_TOKEN", "")
+    # Basic sanity check — GitHub tokens are at minimum 20 chars
+    if len(token) < 20:
         raise HTTPException(status_code=503, detail="GITHUB_TOKEN not configured")
     return GitHubClient(token)
 
@@ -22,25 +27,52 @@ def _get_client() -> GitHubClient:
 class RepoAnalyzeRequest(BaseModel):
     repo: str = Field(..., description="owner/repo format")
 
+    @field_validator("repo")
+    @classmethod
+    def validate_repo(cls, v: str) -> str:
+        if not _REPO_RE.match(v):
+            raise ValueError("repo must be in owner/name format (alphanumeric, hyphens, dots)")
+        return v
+
 
 class IssueRequest(BaseModel):
-    repo: str
-    title: str
-    body: str
-    labels: list[str] = []
+    repo: str = Field(..., max_length=200)
+    title: str = Field(..., min_length=1, max_length=256)
+    body: str = Field(..., min_length=1, max_length=65_536)
+    labels: list[str] = Field(default=[], max_length=10)
+
+    @field_validator("repo")
+    @classmethod
+    def validate_repo(cls, v: str) -> str:
+        if not _REPO_RE.match(v):
+            raise ValueError("repo must be in owner/name format")
+        return v
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def validate_labels(cls, v: list) -> list:
+        return [str(lbl)[:50] for lbl in v[:10]]
 
 
 class PRReviewRequest(BaseModel):
-    repo: str
-    pr_number: int
+    repo: str = Field(..., max_length=200)
+    pr_number: int = Field(..., gt=0, lt=1_000_000)
     post_review: bool = False
+
+    @field_validator("repo")
+    @classmethod
+    def validate_repo(cls, v: str) -> str:
+        if not _REPO_RE.match(v):
+            raise ValueError("repo must be in owner/name format")
+        return v
 
 
 class SearchRequest(BaseModel):
-    query: str
-    language: str = "Solidity"
-    org: str | None = None
-    max_results: int = 20
+    query: str = Field(..., min_length=1, max_length=_QUERY_MAX)
+    language: str = Field("Solidity", max_length=50, pattern=r"^[A-Za-z0-9 #+_-]+$")
+    org: str | None = Field(None, max_length=100, pattern=r"^[A-Za-z0-9_-]*$")
+    # Cap at 50 — GitHub API has rate limits
+    max_results: int = Field(20, ge=1, le=50)
 
 
 @router.post("/analyze")
