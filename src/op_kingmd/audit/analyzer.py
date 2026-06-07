@@ -28,6 +28,7 @@ from typing import Any
 
 import structlog
 import yaml
+from packaging.version import Version, InvalidVersion
 
 logger = structlog.get_logger(__name__)
 
@@ -119,15 +120,28 @@ class AuditEngine:
     def __init__(self, config_path: str | Path | None = None) -> None:
         self._config = self._load_config(config_path or _CONFIG_PATH)
 
+    # Maximum source size accepted (matches API limit)
+    _MAX_SOURCE_BYTES = 500_000
+
     def audit(self, source: str, contract_name: str | None = None) -> AuditResult:
         """Run full audit pipeline on Solidity source string or file path."""
         path = None
         if Path(source).exists():
-            path = str(source)
-            source_code = Path(source).read_text()
+            resolved = Path(source).resolve()
+            # Guard against path traversal — ensure it ends in .sol
+            if resolved.suffix not in (".sol", ".vy"):
+                raise ValueError(f"Unsupported file type: {resolved.suffix}")
+            path = str(resolved)
+            source_code = resolved.read_text(encoding="utf-8", errors="replace")
         else:
             source_code = source
             path = "<inline>"
+
+        # Enforce size cap to prevent ReDoS / memory exhaustion
+        if len(source_code.encode()) > self._MAX_SOURCE_BYTES:
+            raise ValueError(
+                f"Source exceeds maximum size ({self._MAX_SOURCE_BYTES // 1000} KB)"
+            )
 
         name = contract_name or self._extract_contract_name(source_code) or "Contract"
         result = AuditResult(contract_name=name, contract_path=path or "<inline>")
@@ -260,12 +274,18 @@ class AuditEngine:
         ),
     ]
 
+    # Hard cap per line — prevents catastrophic backtracking on crafted inputs
+    _MAX_LINE_LEN = 2_000
+
     def _static_analysis(self, source: str, path: str) -> list[Finding]:
         findings = []
         lines = source.splitlines()
 
         for pattern, severity, name, desc, rec in self.VULNERABILITY_PATTERNS:
             for i, line in enumerate(lines, 1):
+                # Skip pathologically long lines to avoid ReDoS
+                if len(line) > self._MAX_LINE_LEN:
+                    continue
                 if re.search(pattern, line):
                     snippet = line.strip()
                     findings.append(Finding(
@@ -298,14 +318,27 @@ class AuditEngine:
             and self._is_available("slither")
         )
 
+    _SLITHER_TIMEOUT_BOUNDS = (10, 600)   # seconds
+
     def _run_slither(self, path: str) -> list[Finding]:
         findings = []
         try:
+            # Clamp timeout to safe bounds — prevents DoS via crafted config
+            raw_timeout = int(
+                self._config.get("audit", {})
+                .get("tools", {})
+                .get("slither", {})
+                .get("timeout", 120)
+            )
+            timeout = max(
+                self._SLITHER_TIMEOUT_BOUNDS[0],
+                min(raw_timeout, self._SLITHER_TIMEOUT_BOUNDS[1]),
+            )
             result = subprocess.run(
                 ["slither", path, "--json", "-"],
                 capture_output=True,
                 text=True,
-                timeout=int(self._config.get("audit", {}).get("tools", {}).get("slither", {}).get("timeout", 120)),
+                timeout=timeout,
             )
             if result.returncode not in (0, 255):  # 255 = findings present
                 logger.warning("slither_nonzero_exit", code=result.returncode)
@@ -362,6 +395,8 @@ class AuditEngine:
         seen = set()
         for pattern, rule, desc, savings in self.GAS_PATTERNS:
             for i, line in enumerate(lines, 1):
+                if len(line) > self._MAX_LINE_LEN:
+                    continue
                 if re.search(pattern, line) and rule not in seen:
                     opts.append(GasOptimization(
                         rule=rule, description=desc,
@@ -381,20 +416,31 @@ class AuditEngine:
 
         if pkg_json.exists():
             try:
-                pkg = json.loads(pkg_json.read_text())
+                pkg = json.loads(pkg_json.read_text(encoding="utf-8"))
                 deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-                known_vulnerable = self._config.get("audit", {}).get("dependency_checks", {}).get("known_vulnerable_packages", [])
+                known_vulnerable = (
+                    self._config.get("audit", {})
+                    .get("dependency_checks", {})
+                    .get("known_vulnerable_packages", [])
+                )
                 for entry in known_vulnerable:
                     name = entry["name"]
                     min_safe = entry["min_safe_version"]
-                    current = deps.get(name, "").lstrip("^~>=")
-                    if current and current < min_safe:
-                        issues.append(DependencyIssue(
-                            package=name,
-                            current_version=current,
-                            min_safe_version=min_safe,
-                            severity=Severity.HIGH,
-                        ))
+                    current = deps.get(name, "").lstrip("^~>=<! ")
+                    if not current:
+                        continue
+                    try:
+                        # Use proper semver comparison — string comparison is wrong
+                        # (e.g. "1.10.0" < "1.9.0" would be True with string compare)
+                        if Version(current) < Version(min_safe):
+                            issues.append(DependencyIssue(
+                                package=name,
+                                current_version=current,
+                                min_safe_version=min_safe,
+                                severity=Severity.HIGH,
+                            ))
+                    except InvalidVersion:
+                        logger.debug("dep_unparseable_version", package=name, version=current)
             except Exception as exc:
                 logger.debug("dep_scan_failed", error=str(exc))
         return issues

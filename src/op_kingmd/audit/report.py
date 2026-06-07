@@ -6,11 +6,11 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from html import escape as html_escape
 from pathlib import Path
 from typing import Any
 
 import structlog
-from jinja2 import Environment, PackageLoader, select_autoescape
 
 from op_kingmd.audit.analyzer import AuditResult, Finding, GasOptimization, Severity
 
@@ -242,30 +242,40 @@ class ReportGenerator:
             "#dc2626"
         )
 
+        # All dynamic values are HTML-escaped before insertion to prevent XSS
+        # if contract source or finding descriptions contain HTML-special characters.
         findings_html = ""
         for f in r.findings:
             color = self.SEVERITY_COLORS.get(f.severity.value, "#6b7280")
             emoji = self.SEVERITY_EMOJI.get(f.severity.value, "⚪")
-            snippet_block = f"<pre><code>{f.snippet}</code></pre>" if f.snippet else ""
+            snippet_block = (
+                f"<pre><code>{html_escape(f.snippet)}</code></pre>" if f.snippet else ""
+            )
             findings_html += f"""
             <div class="finding" style="border-left: 4px solid {color}; padding: 12px; margin: 8px 0; background: #f9f9f9;">
-              <h4>{emoji} [{f.severity.value.upper()}] {f.name}</h4>
-              <p><strong>Location:</strong> <code>{f.location}:{f.line or '?'}</code></p>
-              <p>{f.description}</p>
+              <h4>{emoji} [{html_escape(f.severity.value.upper())}] {html_escape(f.name)}</h4>
+              <p><strong>Location:</strong> <code>{html_escape(str(f.location))}:{html_escape(str(f.line or '?'))}</code></p>
+              <p>{html_escape(f.description)}</p>
               {snippet_block}
-              <p><em><strong>Recommendation:</strong> {f.recommendation or 'N/A'}</em></p>
+              <p><em><strong>Recommendation:</strong> {html_escape(f.recommendation or 'N/A')}</em></p>
             </div>"""
 
         gas_rows = "".join(
-            f"<tr><td><code>{g.rule}</code></td><td>{g.description}</td><td>{g.savings_estimate or '—'}</td></tr>"
+            f"<tr><td><code>{html_escape(g.rule)}</code></td>"
+            f"<td>{html_escape(g.description)}</td>"
+            f"<td>{html_escape(g.savings_estimate or '—')}</td></tr>"
             for g in r.gas_optimizations
         )
+
+        deploy_badge_class = "blocked" if r.blocks_deploy else "safe"
+        deploy_text = "BLOCKED ⛔" if r.blocks_deploy else "ALLOWED ✅"
 
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Audit Report — {r.contract_name}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+  <title>Audit Report — {html_escape(r.contract_name)}</title>
   <style>
     body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; }}
     .score-badge {{ display: inline-block; font-size: 3rem; font-weight: 900; color: {score_color}; }}
@@ -282,11 +292,11 @@ class ReportGenerator:
 </head>
 <body>
   <h1>Security Audit Report</h1>
-  <p>Contract: <strong>{r.contract_name}</strong> &nbsp;·&nbsp; Generated: {report.timestamp}</p>
+  <p>Contract: <strong>{html_escape(r.contract_name)}</strong> &nbsp;·&nbsp; Generated: {html_escape(report.timestamp)}</p>
 
   <h2>Executive Summary</h2>
   <div class="score-badge">{r.score}/100</div>
-  <span class="badge {'blocked' if r.blocks_deploy else 'safe'}">{r.risk_label} — Deploy {'BLOCKED ⛔' if r.blocks_deploy else 'ALLOWED ✅'}</span>
+  <span class="badge {deploy_badge_class}">{html_escape(r.risk_label)} — Deploy {deploy_text}</span>
 
   <table style="margin-top: 16px;">
     <tr><th>Severity</th><th>Count</th></tr>
@@ -304,6 +314,6 @@ class ReportGenerator:
   {'<table><tr><th>Rule</th><th>Description</th><th>Est. Savings</th></tr>' + gas_rows + '</table>' if gas_rows else '<p>No optimizations detected.</p>'}
 
   <hr>
-  <small>Audit by <strong>Op-Kingmd</strong> · Model: {report.model_version} · Chain: {report.chain}/{report.network}</small>
+  <small>Audit by <strong>Op-Kingmd</strong> · Chain: {html_escape(report.chain)}/{html_escape(report.network)}</small>
 </body>
 </html>"""

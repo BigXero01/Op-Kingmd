@@ -1163,30 +1163,78 @@ function renderAudit(data) {
   (data.gas_optimizations || []).forEach(g => {
     const el = document.createElement('div');
     el.className = 'finding';
-    el.innerHTML = `
-      <div class="finding-head">
-        <span class="badge badge-gas">GAS</span>
-        <span class="finding-name">${g.rule || g.description}</span>
-        ${g.savings_estimate ? `<span class="finding-loc">${g.savings_estimate}</span>` : ''}
-      </div>
-      <div class="finding-desc">${g.description || ''}</div>`;
+
+    const head = document.createElement('div');
+    head.className = 'finding-head';
+
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-gas';
+    badge.textContent = 'GAS';
+    head.appendChild(badge);
+
+    const name = document.createElement('span');
+    name.className = 'finding-name';
+    name.textContent = g.rule || g.description || '';
+    head.appendChild(name);
+
+    if (g.savings_estimate) {
+      const loc = document.createElement('span');
+      loc.className = 'finding-loc';
+      loc.textContent = g.savings_estimate;
+      head.appendChild(loc);
+    }
+    el.appendChild(head);
+
+    const desc = document.createElement('div');
+    desc.className = 'finding-desc';
+    desc.textContent = g.description || '';
+    el.appendChild(desc);
+
     gl.appendChild(el);
   });
   (data.gas_optimizations||[]).length ? show('gas-wrap') : hide('gas-wrap');
 }
 
+const _VALID_SEV = new Set(['critical','high','medium','low','informational','info']);
+
 function makeFinding(f) {
+  const sev = _VALID_SEV.has(f.severity) ? f.severity : 'info';
   const el = document.createElement('div');
   el.className = 'finding';
-  el.dataset.sev = f.severity || 'info';
-  el.innerHTML = `
-    <div class="finding-head">
-      <span class="badge badge-${f.severity || 'info'}">${(f.severity||'info').toUpperCase()}</span>
-      <span class="finding-name">${f.name || ''}</span>
-      ${f.line ? `<span class="finding-loc">${f.location ? f.location.split('/').pop() : ''}:${f.line}</span>` : ''}
-    </div>
-    <div class="finding-desc">${f.description || ''}</div>
-    ${f.recommendation ? `<div class="finding-rec">→ ${f.recommendation}</div>` : ''}`;
+  el.dataset.sev = sev;
+
+  const head = document.createElement('div');
+  head.className = 'finding-head';
+
+  const badge = document.createElement('span');
+  badge.className = `badge badge-${sev}`;
+  badge.textContent = sev.toUpperCase();
+  head.appendChild(badge);
+
+  const name = document.createElement('span');
+  name.className = 'finding-name';
+  name.textContent = f.name || '';
+  head.appendChild(name);
+
+  if (f.line) {
+    const loc = document.createElement('span');
+    loc.className = 'finding-loc';
+    loc.textContent = `${f.location ? String(f.location).split('/').pop() : ''}:${f.line}`;
+    head.appendChild(loc);
+  }
+  el.appendChild(head);
+
+  const desc = document.createElement('div');
+  desc.className = 'finding-desc';
+  desc.textContent = f.description || '';
+  el.appendChild(desc);
+
+  if (f.recommendation) {
+    const rec = document.createElement('div');
+    rec.className = 'finding-rec';
+    rec.textContent = `→ ${f.recommendation}`;
+    el.appendChild(rec);
+  }
   return el;
 }
 
@@ -1334,7 +1382,13 @@ function renderGithub(data, repoName) {
 
   const files = data.sol_files || [];
   if (files.length) {
-    $('gh-files').innerHTML = files.slice(0,12).map(f=>`<div>${f}</div>`).join('');
+    const ghFiles = $('gh-files');
+    ghFiles.innerHTML = '';
+    files.slice(0, 12).forEach(f => {
+      const div = document.createElement('div');
+      div.textContent = f;
+      ghFiles.appendChild(div);
+    });
     show('gh-files-wrap');
   } else {
     hide('gh-files-wrap');

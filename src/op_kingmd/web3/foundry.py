@@ -77,10 +77,14 @@ class FoundryRunner:
             args.append("--broadcast")
         if verify:
             args.append("--verify")
+        # Never pass private key as a CLI argument — it would appear in
+        # `ps aux`, shell history, and log files. Forge reads $PRIVATE_KEY.
+        extra_env: dict[str, str] = {}
         if private_key:
-            args += ["--private-key", private_key]
+            extra_env["PRIVATE_KEY"] = private_key
+            args += ["--private-key", "$PRIVATE_KEY"]
         args += extra_args or []
-        return self._run(args)
+        return self._run(args, extra_env=extra_env)
 
     def fmt(self, check: bool = False) -> ForgeResult:
         args = ["forge", "fmt"]
@@ -146,13 +150,26 @@ class FoundryRunner:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
-    def _run(self, args: list[str], cwd: Path | None = None) -> ForgeResult:
+    def _run(
+        self,
+        args: list[str],
+        cwd: Path | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> ForgeResult:
+        import copy
         cwd = cwd or self.root
-        cmd = " ".join(args)
+        # Redact any private key from the logged command string
+        cmd = " ".join(
+            "***" if a.startswith("0x") and len(a) == 66 else a for a in args
+        )
         logger.debug("forge_run", command=cmd)
+        env = copy.copy(os.environ)
+        if extra_env:
+            env.update(extra_env)
         try:
             proc = subprocess.run(
-                args, capture_output=True, text=True, cwd=str(cwd), timeout=300
+                args, capture_output=True, text=True, cwd=str(cwd),
+                timeout=300, env=env,
             )
             success = proc.returncode == 0
             if not success:

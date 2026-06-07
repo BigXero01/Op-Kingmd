@@ -88,9 +88,19 @@ class ModelEngine:
         t0 = time.perf_counter()
         logger.info("loading_model", model_id=self.config.model_id)
 
+        # trust_remote_code allows arbitrary Python execution from the model repo.
+        # Default to False; opt-in explicitly by setting OPKMD_TRUST_REMOTE_CODE=1.
+        trust_remote = os.getenv("OPKMD_TRUST_REMOTE_CODE", "0") == "1"
+        if trust_remote:
+            logger.warning(
+                "trust_remote_code_enabled",
+                model=self.config.model_id,
+                note="Arbitrary code from the model repository will execute.",
+            )
+
         self._tokenizer = AutoTokenizer.from_pretrained(
             self.config.model_id,
-            trust_remote_code=True,
+            trust_remote_code=trust_remote,
             token=self.config.hf_token,
             padding_side="left",
         )
@@ -104,7 +114,7 @@ class ModelEngine:
             self.config.model_id,
             quantization_config=bnb_config,
             device_map=device_map,
-            trust_remote_code=True,
+            trust_remote_code=trust_remote,
             token=self.config.hf_token,
             torch_dtype=torch.bfloat16 if not self.config.quantize_4bit else None,
             attn_implementation="flash_attention_2" if self._has_flash_attn() else "eager",
