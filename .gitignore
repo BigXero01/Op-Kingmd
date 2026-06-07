@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Environment / secrets
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.yaml
+secrets.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Model weights & checkpoints (large binary files)
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+models/
+checkpoints/
+fine-tuned/
+adapters/
+
+# HuggingFace cache
+.cache/
+hf_cache/
+
+# Logs
+logs/
+*.log
+audit_reports/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Compiled Solidity artifacts
+artifacts/
+cache/
+out/
+typechain-types/
+
+# Node (for Hardhat / Foundry JS deps)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Foundry
+broadcast/

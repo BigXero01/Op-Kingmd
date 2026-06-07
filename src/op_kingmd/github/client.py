@@ -1,0 +1,270 @@
+"""GitHub API client wrapping PyGithub with Web3-aware helpers."""
+
+from __future__ import annotations
+
+import base64
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import structlog
+from github import Auth, Github, GithubException
+from github.ContentFile import ContentFile
+from github.PullRequest import PullRequest
+from github.Repository import Repository
+
+logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class FileContent:
+    path: str
+    content: str
+    sha: str
+    size: int
+    url: str
+
+
+@dataclass
+class SearchResult:
+    path: str
+    repo: str
+    url: str
+    score: float
+    snippet: str | None = None
+
+
+class GitHubClient:
+    """Authenticated GitHub client with Web3-aware repository operations."""
+
+    def __init__(self, token: str | None = None) -> None:
+        token = token or os.getenv("GITHUB_TOKEN")
+        if not token:
+            raise ValueError("GITHUB_TOKEN environment variable is required.")
+        self._gh = Github(auth=Auth.Token(token))
+        self._token = token
+
+    # ── Repository access ─────────────────────────────────────────────────────
+
+    def get_repo(self, full_name: str) -> Repository:
+        """Get a repository by 'owner/name'."""
+        return self._gh.get_repo(full_name)
+
+    def list_solidity_files(self, repo: Repository, path: str = "") -> list[str]:
+        """Return all .sol file paths in a repository."""
+        sol_files = []
+        try:
+            contents = repo.get_contents(path)
+            if not isinstance(contents, list):
+                contents = [contents]
+            for item in contents:
+                if item.type == "dir":
+                    sol_files.extend(self.list_solidity_files(repo, item.path))
+                elif item.path.endswith(".sol"):
+                    sol_files.append(item.path)
+        except GithubException as exc:
+            logger.warning("list_files_failed", path=path, error=str(exc))
+        return sol_files
+
+    def get_file(self, repo: Repository, path: str) -> FileContent | None:
+        """Fetch a single file's content from a repository."""
+        try:
+            cf: ContentFile = repo.get_contents(path)
+            if isinstance(cf, list):
+                cf = cf[0]
+            raw = base64.b64decode(cf.content).decode("utf-8", errors="replace")
+            return FileContent(
+                path=cf.path, content=raw, sha=cf.sha, size=cf.size, url=cf.html_url
+            )
+        except GithubException as exc:
+            logger.warning("get_file_failed", path=path, error=str(exc))
+            return None
+
+    def get_all_solidity_sources(
+        self, repo: Repository, max_files: int = 50
+    ) -> dict[str, str]:
+        """Download all Solidity source files from a repo."""
+        paths = self.list_solidity_files(repo)[:max_files]
+        sources = {}
+        for p in paths:
+            fc = self.get_file(repo, p)
+            if fc:
+                sources[p] = fc.content
+        logger.info("fetched_sol_sources", repo=repo.full_name, count=len(sources))
+        return sources
+
+    # ── Issues ────────────────────────────────────────────────────────────────
+
+    def create_issue(
+        self,
+        repo: Repository,
+        title: str,
+        body: str,
+        labels: list[str] | None = None,
+        assignees: list[str] | None = None,
+    ) -> Any:
+        """Create a GitHub issue."""
+        kwargs: dict[str, Any] = {"title": title, "body": body}
+        if labels:
+            kwargs["labels"] = labels
+        if assignees:
+            kwargs["assignees"] = assignees
+        issue = repo.create_issue(**kwargs)
+        logger.info("issue_created", number=issue.number, title=title)
+        return issue
+
+    def create_audit_issue(self, repo: Repository, audit_report: dict) -> Any:
+        """Open a structured audit issue from an AuditReport dict."""
+        title = f"[Security Audit] {audit_report.get('contract_name', 'Contract')} — {audit_report.get('risk_label', 'Review Required')}"
+        body_lines = [
+            f"## Security Audit Report",
+            f"**Risk Score**: {audit_report.get('score', 'N/A')}/100 — {audit_report.get('risk_label', '')}",
+            f"**Contract**: `{audit_report.get('contract_name', 'Unknown')}`",
+            "",
+            "### Findings",
+        ]
+        for finding in audit_report.get("findings", []):
+            severity = finding.get("severity", "info").upper()
+            name = finding.get("name", "")
+            desc = finding.get("description", "")
+            body_lines.append(f"- **[{severity}]** {name}: {desc}")
+
+        body_lines += [
+            "",
+            "### Gas Optimizations",
+        ]
+        for opt in audit_report.get("gas_optimizations", []):
+            body_lines.append(f"- {opt.get('description', '')}")
+
+        body_lines += ["", "_Generated by Op-Kingmd Audit Layer_"]
+
+        labels = ["security", "audit"]
+        score = audit_report.get("score", 100)
+        if score < 60:
+            labels.append("critical")
+        elif score < 75:
+            labels.append("high-priority")
+
+        return self.create_issue(repo, title, "\n".join(body_lines), labels=labels)
+
+    # ── Pull Requests ──────────────────────────────────────────────────────────
+
+    def get_pr(self, repo: Repository, number: int) -> PullRequest:
+        return repo.get_pull(number)
+
+    def list_open_prs(self, repo: Repository) -> list[PullRequest]:
+        return list(repo.get_pulls(state="open", sort="created"))
+
+    def create_pr(
+        self,
+        repo: Repository,
+        title: str,
+        body: str,
+        head: str,
+        base: str = "main",
+        draft: bool = False,
+    ) -> PullRequest:
+        pr = repo.create_pull(title=title, body=body, head=head, base=base, draft=draft)
+        logger.info("pr_created", number=pr.number, title=title)
+        return pr
+
+    def comment_on_pr(self, pr: PullRequest, body: str) -> Any:
+        comment = pr.create_issue_comment(body)
+        logger.info("pr_comment_added", pr=pr.number)
+        return comment
+
+    def request_changes(self, pr: PullRequest, body: str) -> None:
+        pr.create_review(body=body, event="REQUEST_CHANGES")
+        logger.info("pr_changes_requested", pr=pr.number)
+
+    def approve_pr(self, pr: PullRequest, body: str = "LGTM") -> None:
+        pr.create_review(body=body, event="APPROVE")
+
+    # ── Code search ───────────────────────────────────────────────────────────
+
+    def search_code(
+        self,
+        query: str,
+        language: str = "Solidity",
+        org: str | None = None,
+        max_results: int = 30,
+    ) -> list[SearchResult]:
+        """Search GitHub code using code search API."""
+        q = f"{query} language:{language}"
+        if org:
+            q += f" org:{org}"
+        results = []
+        try:
+            for item in self._gh.search_code(q)[:max_results]:
+                results.append(
+                    SearchResult(
+                        path=item.path,
+                        repo=item.repository.full_name,
+                        url=item.html_url,
+                        score=item.score,
+                    )
+                )
+        except GithubException as exc:
+            logger.warning("code_search_failed", error=str(exc))
+        return results
+
+    # ── File commits ──────────────────────────────────────────────────────────
+
+    def commit_file(
+        self,
+        repo: Repository,
+        path: str,
+        content: str,
+        message: str,
+        branch: str = "main",
+        sha: str | None = None,
+    ) -> Any:
+        """Create or update a file via the contents API."""
+        kwargs: dict[str, Any] = {
+            "path": path,
+            "message": message,
+            "content": content,
+            "branch": branch,
+        }
+        if sha:
+            kwargs["sha"] = sha
+        try:
+            existing = repo.get_contents(path, ref=branch)
+            if isinstance(existing, list):
+                existing = existing[0]
+            kwargs["sha"] = existing.sha
+        except GithubException:
+            pass
+
+        result = repo.create_file(**kwargs) if "sha" not in kwargs else repo.update_file(**kwargs)
+        logger.info("file_committed", path=path, branch=branch)
+        return result
+
+    def commit_audit_report(
+        self, repo: Repository, report_json: str, branch: str = "main"
+    ) -> Any:
+        """Commit an audit report JSON to the audits/ directory."""
+        import time
+        ts = int(time.time())
+        path = f"audits/audit_{ts}.json"
+        return self.commit_file(
+            repo, path, report_json,
+            message=f"chore: add audit report [{ts}]",
+            branch=branch,
+        )
+
+    # ── Utilities ─────────────────────────────────────────────────────────────
+
+    @property
+    def authenticated_user(self) -> str:
+        return self._gh.get_user().login
+
+    def close(self) -> None:
+        self._gh.close()
+
+    def __enter__(self) -> "GitHubClient":
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.close()

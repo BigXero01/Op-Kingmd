@@ -1,0 +1,166 @@
+audit:
+  # ── Thresholds ────────────────────────────────────────────────────────────
+  # Score 0-100; deployment blocked below this value
+  block_threshold: 60
+  # Warn but allow deployment between warn and block
+  warn_threshold: 75
+
+  # ── Severity weights for risk score calculation ───────────────────────────
+  severity_weights:
+    critical: 40
+    high: 20
+    medium: 10
+    low: 3
+    informational: 1
+
+  # ── Vulnerability categories ──────────────────────────────────────────────
+  vulnerability_patterns:
+    reentrancy:
+      severity: critical
+      description: "Contract calls external address before updating state"
+      patterns:
+        - "call{value"
+        - ".call("
+        - "transfer("
+        - "send("
+
+    integer_overflow:
+      severity: high
+      description: "Arithmetic operations without SafeMath or Solidity 0.8+ checks"
+      patterns:
+        - "pragma solidity ^0.7"
+        - "pragma solidity 0.6"
+        - "pragma solidity 0.5"
+
+    access_control:
+      severity: high
+      description: "Missing onlyOwner or access control modifier"
+      patterns:
+        - "function.*public.*external"
+
+    unchecked_return:
+      severity: medium
+      description: "Return value of external call not checked"
+      patterns:
+        - ".call("
+        - ".delegatecall("
+        - ".staticcall("
+
+    tx_origin:
+      severity: high
+      description: "Use of tx.origin for authentication"
+      patterns:
+        - "tx.origin"
+
+    timestamp_dependence:
+      severity: medium
+      description: "Block timestamp used for critical logic"
+      patterns:
+        - "block.timestamp"
+        - "now "
+
+    selfdestruct:
+      severity: critical
+      description: "Selfdestruct can drain contract funds"
+      patterns:
+        - "selfdestruct("
+        - "suicide("
+
+    delegatecall:
+      severity: high
+      description: "Unsafe delegatecall to untrusted address"
+      patterns:
+        - "delegatecall("
+
+    price_manipulation:
+      severity: critical
+      description: "Oracle price can be manipulated in same transaction"
+      patterns:
+        - "getAmountsOut"
+        - "getReserves()"
+
+    flash_loan_risk:
+      severity: high
+      description: "Function vulnerable to flash loan attacks"
+      patterns:
+        - "flashLoan"
+        - "flashSwap"
+
+    unprotected_initializer:
+      severity: critical
+      description: "Initializer function callable multiple times"
+      patterns:
+        - "function initialize("
+        - "function init("
+
+    arbitrary_jump:
+      severity: critical
+      description: "Jump to arbitrary location"
+      patterns:
+        - "assembly {"
+
+  # ── Gas optimization rules ────────────────────────────────────────────────
+  gas_rules:
+    use_custom_errors:
+      description: "Use custom errors instead of require strings"
+      savings_estimate: "~50 gas per revert"
+      pattern: "require.*\""
+
+    pack_storage:
+      description: "Pack struct fields to minimize storage slots"
+      savings_estimate: "Up to 20000 gas per write"
+
+    immutable_variables:
+      description: "Use immutable for variables set in constructor"
+      savings_estimate: "~200 gas per read"
+      pattern: "address (public|private) [a-zA-Z]"
+
+    cache_array_length:
+      description: "Cache array length in for-loop to avoid re-reading storage"
+      savings_estimate: "~100 gas per iteration"
+      pattern: "for.*\\.length"
+
+    unchecked_increment:
+      description: "Use unchecked { ++i } in loops (Solidity 0.8+)"
+      savings_estimate: "~50 gas per iteration"
+      pattern: "i\\+\\+"
+
+    avoid_zero_to_non_zero:
+      description: "Initialize storage to non-zero to avoid cold SSTORE"
+      savings_estimate: "~20000 gas"
+
+  # ── Dependency scanning ───────────────────────────────────────────────────
+  dependency_checks:
+    check_npm_audit: true
+    check_foundry_deps: true
+    known_vulnerable_packages:
+      - name: "@openzeppelin/contracts"
+        min_safe_version: "4.9.0"
+      - name: "hardhat"
+        min_safe_version: "2.19.0"
+      - name: "ethers"
+        min_safe_version: "6.0.0"
+
+  # ── External tools ────────────────────────────────────────────────────────
+  tools:
+    slither:
+      enabled: true
+      timeout: 120
+      detectors: "all"
+    semgrep:
+      enabled: true
+      config: "p/solidity"
+      timeout: 60
+    mythril:
+      enabled: false           # optional; requires separate install
+      timeout: 300
+
+  # ── Report settings ───────────────────────────────────────────────────────
+  report:
+    formats:
+      - json
+      - markdown
+      - html
+    output_dir: "./audit_reports"
+    include_recommendations: true
+    include_code_snippets: true

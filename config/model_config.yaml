@@ -1,0 +1,63 @@
+model:
+  # Primary base model — top download count, Apache-2.0, strong code quality
+  default_id: "Qwen/Qwen2.5-Coder-7B-Instruct"
+
+  # Fallback models in order of preference (latency vs quality trade-off)
+  alternatives:
+    - id: "Qwen/Qwen2.5-Coder-14B-Instruct"
+      description: "Higher quality, 2x VRAM requirement"
+    - id: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+      description: "MoE architecture, excellent reasoning"
+    - id: "deepseek-ai/deepseek-coder-6.7b-instruct"
+      description: "Lightweight, good for CPU inference"
+    - id: "Qwen/Qwen2.5-Coder-32B-Instruct"
+      description: "Top quality, requires multi-GPU"
+
+  # Quantization settings
+  quantization:
+    enabled: true
+    bits: 4                    # 4-bit QLoRA
+    quant_type: "nf4"
+    double_quant: true
+    compute_dtype: "bfloat16"
+
+  # Inference parameters
+  generation:
+    max_new_tokens: 4096
+    temperature: 0.2           # Low for code (deterministic)
+    top_p: 0.95
+    top_k: 50
+    repetition_penalty: 1.05
+    do_sample: true
+
+  # Context window
+  max_seq_length: 16384
+
+  # System prompt
+  system_prompt: |
+    You are Op-Kingmd, a top-tier Web3 coding assistant specializing in smart contract
+    development, DeFi protocols, NFT systems, and blockchain infrastructure.
+    You produce production-ready, gas-optimized, and security-hardened code.
+    You understand Solidity, Rust (Anchor/Substrate), TypeScript (ethers.js/viem/wagmi),
+    Foundry, Hardhat, and all major EVM-compatible chains.
+    Always include natspec documentation, comprehensive tests, and deployment scripts.
+    When you detect potential security vulnerabilities, call them out explicitly.
+
+lora:
+  # LoRA adapter configuration for fine-tuning
+  r: 64
+  lora_alpha: 128
+  target_modules:
+    - "q_proj"
+    - "v_proj"
+    - "k_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+  # Inference adapter path (optional; null = use base model)
+  adapter_path: null

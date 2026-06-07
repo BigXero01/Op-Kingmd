@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Op-Kingmd</title>
+<style>
+  :root {
+    --bg:       #0c0c0c;
+    --surface:  #141414;
+    --border:   #242424;
+    --muted:    #2e2e2e;
+    --text:     #e8e8e8;
+    --dim:      #666;
+    --accent:   #e8e8e8;
+    --green:    #4ade80;
+    --yellow:   #facc15;
+    --red:      #f87171;
+    --orange:   #fb923c;
+    --radius:   10px;
+    --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    --sans:     system-ui, -apple-system, sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { font-size: 15px; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100dvh;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-height: 100dvh;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 28px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .wordmark-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--text);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+  }
+
+  .wordmark-icon svg { color: var(--bg); }
+
+  .wordmark h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .wordmark span {
+    font-size: 0.75rem;
+    color: var(--dim);
+    font-weight: 400;
+    margin-left: 2px;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 3px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 7px 12px;
+    background: none;
+    border: none;
+    color: var(--dim);
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 7px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+
+  .tab:hover { color: var(--text); background: var(--muted); }
+
+  .tab.active {
+    background: var(--muted);
+    color: var(--text);
+  }
+
+  /* ── Panels ── */
+  main { padding: 20px 0 40px; }
+
+  .panel { display: none; flex-direction: column; gap: 14px; }
+  .panel.active { display: flex; }
+
+  /* ── Cards / Sections ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .card-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .card-body { padding: 14px 16px; }
+
+  /* ── Form elements ── */
+  label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--dim);
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+  }
+
+  textarea, input, select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.88rem;
+    padding: 10px 12px;
+    resize: vertical;
+    transition: border-color 0.15s;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  textarea { font-family: var(--sans); min-height: 90px; }
+  textarea.mono { font-family: var(--mono); font-size: 0.8rem; min-height: 200px; }
+
+  textarea:focus, input:focus, select:focus {
+    border-color: var(--muted);
+  }
+
+  ::placeholder { color: var(--dim); }
+
+  select option { background: var(--surface); }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .field { display: flex; flex-direction: column; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: #3a3a3a; border-color: #3a3a3a; }
+  .btn:active { transform: scale(0.98); }
+
+  .btn-primary {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+
+  .btn-primary:hover { background: #ccc; border-color: #ccc; }
+
+  .btn-sm {
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Code output ── */
+  .code-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+
+  .code-block-header {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+
+  .code-lang {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .code-block pre {
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--text);
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  /* ── Score ring ── */
+  .score-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .score-ring {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+  }
+
+  .score-ring svg { transform: rotate(-90deg); }
+
+  .score-ring circle {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+  }
+
+  .score-ring .track { stroke: var(--muted); }
+  .score-ring .fill  { transition: stroke-dashoffset 0.8s cubic-bezier(.4,0,.2,1), stroke 0.4s; }
+
+  .score-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .score-num strong {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .score-num small {
+    font-size: 0.6rem;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+  }
+
+  .score-meta { flex: 1; min-width: 160px; }
+
+  .score-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .score-sub {
+    font-size: 0.8rem;
+    color: var(--dim);
+  }
+
+  /* ── Findings list ── */
+  .finding {
+    border-radius: 7px;
+    border-left: 3px solid var(--border);
+    padding: 10px 14px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .finding-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+
+  .badge-critical { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge-high     { background: rgba(251,146,60,.15);  color: var(--orange); }
+  .badge-medium   { background: rgba(250,204,21,.12);  color: var(--yellow); }
+  .badge-low      { background: rgba(74,222,128,.12);  color: var(--green); }
+  .badge-info     { background: rgba(255,255,255,.06); color: var(--dim); }
+  .badge-gas      { background: rgba(255,255,255,.06); color: var(--dim); }
+
+  .finding-name   { font-size: 0.85rem; font-weight: 600; }
+  .finding-loc    { font-size: 0.72rem; color: var(--dim); font-family: var(--mono); margin-left: auto; }
+  .finding-desc   { font-size: 0.8rem; color: #aaa; line-height: 1.5; }
+  .finding-rec    { font-size: 0.78rem; color: var(--dim); font-style: italic; }
+
+  .finding[data-sev="critical"] { border-color: var(--red); }
+  .finding[data-sev="high"]     { border-color: var(--orange); }
+  .finding[data-sev="medium"]   { border-color: var(--yellow); }
+  .finding[data-sev="low"]      { border-color: var(--green); }
+
+  /* ── Status / notices ── */
+  .notice {
+    padding: 10px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid;
+  }
+
+  .notice-safe    { background: rgba(74,222,128,.06); border-color: rgba(74,222,128,.2); color: var(--green); }
+  .notice-warn    { background: rgba(250,204,21,.06); border-color: rgba(250,204,21,.2); color: var(--yellow); }
+  .notice-danger  { background: rgba(248,113,113,.06); border-color: rgba(248,113,113,.2); color: var(--red); }
+  .notice-info    { background: rgba(255,255,255,.04); border-color: var(--border); color: var(--dim); }
+
+  /* ── Skeleton / loading ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface) 25%, var(--muted) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 5px;
+    height: 14px;
+  }
+
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  .loader {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--muted);
+    border-top-color: var(--text);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Misc utils ── */
+  .hidden  { display: none !important; }
+  .divider { height: 1px; background: var(--border); }
+  .gap8    { display: flex; flex-direction: column; gap: 8px; }
+  .gap12   { display: flex; flex-direction: column; gap: 12px; }
+
+  .inline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--dim);
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-val {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-lbl {
+    font-size: 0.7rem;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* ── Copy toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    background: var(--muted);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Checklist ── */
+  .checklist { display: flex; flex-direction: column; gap: 6px; }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.82rem;
+  }
+
+  .check-icon { flex-shrink: 0; margin-top: 2px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+
+  /* ── Mobile ── */
+  @media (max-width: 600px) {
+    .row { grid-template-columns: 1fr; }
+    .stat-row { gap: 16px; }
+    header { padding-top: 20px; }
+    .tab { font-size: 0.75rem; padding: 7px 8px; }
+    .btn-row { gap: 6px; }
+    .btn { flex: 1; justify-content: center; }
+  }
+
+  /* ── Subtle focus ring ── */
+  :focus-visible {
+    outline: 2px solid rgba(255,255,255,.2);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header>
+    <div class="wordmark">
+      <div class="wordmark-icon">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+          <path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/>
+        </svg>
+      </div>
+      <h1>Op-Kingmd<span>/ Web3 LLM</span></h1>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="generate" role="tab">Generate</button>
+      <button class="tab"        data-tab="audit"    role="tab">Audit</button>
+      <button class="tab"        data-tab="review"   role="tab">Review</button>
+      <button class="tab"        data-tab="github"   role="tab">GitHub</button>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- ────────────────── GENERATE ────────────────── -->
+    <div id="panel-generate" class="panel active" role="tabpanel">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-label">Describe what to build</span>
+        </div>
+        <div class="card-body gap12">
+          <div class="field">
+            <textarea id="gen-desc" placeholder="e.g. An ERC-20 token with permit, snapshot, and a 2% transfer tax that goes to a treasury address…" rows="4"></textarea>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Language</label>
+              <select id="gen-lang">
+                <option value="solidity">Solidity</option>
+                <option value="rust">Rust (Anchor)</option>
+                <option value="typescript">TypeScript</option>
+                <option value="vyper">Vyper</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Framework</label>
+              <select id="gen-fw">
+                <option value="foundry">Foundry</option>
+                <option value="hardhat">Hardhat</option>
+                <option value="anchor">Anchor</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="inline-row" style="gap:6px;">
+            <label style="margin:0; display:flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;">
+              <input type="checkbox" id="gen-tests" checked style="accent-color:var(--text);width:14px;height:14px;"> Tests
+            </label>
+            <label style="margin:0; display:flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;">
+              <input type="checkbox" id="gen-deploy" checked style="accent-color:var(--text);width:14px;height:14px;"> Deploy script
+            </label>
+            <label style="margin:0; display:flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;">
+              <input type="checkbox" id="gen-gas" checked style="accent-color:var(--text);width:14px;height:14px;"> Gas-optimize
+            </label>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" id="gen-btn">
+              <span id="gen-btn-icon">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              </span>
+              Generate
+            </button>
+            <button class="btn btn-sm" id="gen-clear">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick templates -->
+      <div class="card">
+        <div class="card-header"><span class="card-label">Quick start</span></div>
+        <div class="card-body" style="display:flex;flex-wrap:wrap;gap:6px;">
+          <button class="btn btn-sm template-btn" data-tpl="erc20">ERC-20 Token</button>
+          <button class="btn btn-sm template-btn" data-tpl="erc721">NFT Collection</button>
+          <button class="btn btn-sm template-btn" data-tpl="vault">ERC-4626 Vault</button>
+          <button class="btn btn-sm template-btn" data-tpl="staking">Staking Contract</button>
+          <button class="btn btn-sm template-btn" data-tpl="dao">DAO Governance</button>
+          <button class="btn btn-sm template-btn" data-tpl="multisig">Multisig</button>
+          <button class="btn btn-sm template-btn" data-tpl="amm">AMM Pair</button>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div id="gen-output" class="hidden gap12">
+
+        <div id="gen-warnings" class="hidden notice notice-warn">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4m0 4h.01"/></svg>
+          <span id="gen-warnings-text"></span>
+        </div>
+
+        <div id="gen-tabs-out" style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button class="btn btn-sm out-tab active" data-out="contract">Contract</button>
+          <button class="btn btn-sm out-tab hidden" data-out="tests" id="out-tab-tests">Tests</button>
+          <button class="btn btn-sm out-tab hidden" data-out="deploy" id="out-tab-deploy">Deploy</button>
+        </div>
+
+        <div class="code-block" id="gen-code-wrap">
+          <div class="code-block-header">
+            <span class="code-lang" id="gen-code-lang">solidity</span>
+            <button class="btn btn-sm" id="gen-copy">
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" stroke-width="2"/><path stroke="currentColor" stroke-width="2" d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy
+            </button>
+          </div>
+          <pre id="gen-code"></pre>
+        </div>
+      </div>
+
+      <div id="gen-loading" class="hidden card">
+        <div class="card-body gap8">
+          <div class="skeleton" style="width:60%;"></div>
+          <div class="skeleton" style="width:90%;"></div>
+          <div class="skeleton" style="width:75%;"></div>
+          <div class="skeleton" style="width:50%;margin-top:4px;"></div>
+        </div>
+      </div>
+
+    </div><!-- /generate -->
+
+
+    <!-- ────────────────── AUDIT ────────────────── -->
+    <div id="panel-audit" class="panel" role="tabpanel">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-label">Smart contract source</span>
+          <button class="btn btn-sm" id="audit-sample">Load example</button>
+        </div>
+        <div class="card-body gap12">
+          <textarea class="mono" id="audit-src" placeholder="// Paste Solidity source here…" rows="10"></textarea>
+
+          <div class="row">
+            <div class="field">
+              <label>Chain</label>
+              <select id="audit-chain">
+                <option value="ethereum">Ethereum</option>
+                <option value="polygon">Polygon</option>
+                <option value="arbitrum">Arbitrum</option>
+                <option value="base">Base</option>
+                <option value="optimism">Optimism</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Network</label>
+              <select id="audit-net">
+                <option value="mainnet">Mainnet</option>
+                <option value="testnet">Testnet</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" id="audit-btn">
+              <span id="audit-btn-icon">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0 1 12 2.944a11.955 11.955 0 0 1-8.618 3.04A12.02 12.02 0 0 0 3 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              </span>
+              Run Audit
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="audit-loading" class="hidden card">
+        <div class="card-body gap8">
+          <div class="skeleton" style="width:40%;"></div>
+          <div class="skeleton" style="width:70%;"></div>
+          <div class="skeleton" style="width:55%;"></div>
+        </div>
+      </div>
+
+      <div id="audit-result" class="hidden gap12">
+
+        <!-- Score -->
+        <div class="card">
+          <div class="card-body">
+            <div class="score-section">
+              <div class="score-ring">
+                <svg viewBox="0 0 80 80" width="80" height="80">
+                  <circle class="track" cx="40" cy="40" r="32"/>
+                  <circle class="fill" id="score-arc" cx="40" cy="40" r="32"
+                    stroke-dasharray="201"
+                    stroke-dashoffset="201"/>
+                </svg>
+                <div class="score-num">
+                  <strong id="score-val">0</strong>
+                  <small>/100</small>
+                </div>
+              </div>
+              <div class="score-meta">
+                <div class="score-label" id="score-label">—</div>
+                <div class="score-sub" id="score-sub">—</div>
+                <div style="margin-top:10px;" id="deploy-notice"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="card">
+          <div class="card-body">
+            <div class="stat-row">
+              <div class="stat"><div class="stat-val" id="stat-crit" style="color:var(--red)">0</div><div class="stat-lbl">Critical</div></div>
+              <div class="stat"><div class="stat-val" id="stat-high" style="color:var(--orange)">0</div><div class="stat-lbl">High</div></div>
+              <div class="stat"><div class="stat-val" id="stat-med"  style="color:var(--yellow)">0</div><div class="stat-lbl">Medium</div></div>
+              <div class="stat"><div class="stat-val" id="stat-low"  style="color:var(--green)">0</div><div class="stat-lbl">Low</div></div>
+              <div class="stat"><div class="stat-val" id="stat-gas"  style="color:var(--dim)">0</div><div class="stat-lbl">Gas opts</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Findings -->
+        <div id="findings-wrap" class="hidden card">
+          <div class="card-header"><span class="card-label">Security findings</span></div>
+          <div class="card-body gap8" id="findings-list"></div>
+        </div>
+
+        <!-- Gas opts -->
+        <div id="gas-wrap" class="hidden card">
+          <div class="card-header"><span class="card-label">Gas optimizations</span></div>
+          <div class="card-body gap8" id="gas-list"></div>
+        </div>
+
+      </div>
+    </div><!-- /audit -->
+
+
+    <!-- ────────────────── REVIEW ────────────────── -->
+    <div id="panel-review" class="panel" role="tabpanel">
+
+      <div class="card">
+        <div class="card-header"><span class="card-label">Code review</span></div>
+        <div class="card-body gap12">
+          <textarea class="mono" id="rev-src" placeholder="// Paste Solidity or TypeScript to review…" rows="12"></textarea>
+          <div class="field">
+            <label>Language</label>
+            <select id="rev-lang">
+              <option value="solidity">Solidity</option>
+              <option value="typescript">TypeScript</option>
+              <option value="rust">Rust</option>
+            </select>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="rev-btn">
+              <span id="rev-btn-icon">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/></svg>
+              </span>
+              Review Code
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="rev-loading" class="hidden card">
+        <div class="card-body gap8">
+          <div class="skeleton" style="width:50%;"></div>
+          <div class="skeleton" style="width:80%;"></div>
+          <div class="skeleton" style="width:65%;"></div>
+          <div class="skeleton" style="width:45%;"></div>
+        </div>
+      </div>
+
+      <div id="rev-output" class="hidden card">
+        <div class="card-header">
+          <span class="card-label">Review</span>
+          <button class="btn btn-sm" id="rev-copy">Copy</button>
+        </div>
+        <div class="card-body">
+          <div id="rev-text" style="font-size:.85rem;line-height:1.75;white-space:pre-wrap;"></div>
+        </div>
+      </div>
+
+    </div><!-- /review -->
+
+
+    <!-- ────────────────── GITHUB ────────────────── -->
+    <div id="panel-github" class="panel" role="tabpanel">
+
+      <div class="card">
+        <div class="card-header"><span class="card-label">Repository analysis</span></div>
+        <div class="card-body gap12">
+          <div class="field">
+            <label>Repository (owner/name)</label>
+            <input type="text" id="gh-repo" placeholder="e.g. OpenZeppelin/openzeppelin-contracts">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="gh-btn">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+              Analyze Repo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="gh-loading" class="hidden card">
+        <div class="card-body gap8">
+          <div class="skeleton" style="width:55%;"></div>
+          <div class="skeleton" style="width:80%;"></div>
+          <div class="skeleton" style="width:40%;"></div>
+        </div>
+      </div>
+
+      <div id="gh-result" class="hidden gap12">
+        <div class="card">
+          <div class="card-header"><span class="card-label" id="gh-name-lbl">Repository</span></div>
+          <div class="card-body gap12">
+
+            <div class="row" style="gap:8px;">
+              <div class="field">
+                <label>Framework</label>
+                <div class="pill" id="gh-fw" style="display:inline-block;width:auto;">—</div>
+              </div>
+              <div class="field">
+                <label>Chain</label>
+                <div class="pill" id="gh-chain" style="display:inline-block;width:auto;">—</div>
+              </div>
+            </div>
+
+            <div class="stat-row">
+              <div class="stat"><div class="stat-val" id="gh-contracts">0</div><div class="stat-lbl">Contracts</div></div>
+              <div class="stat"><div class="stat-val" id="gh-complexity">0</div><div class="stat-lbl">Complexity</div></div>
+            </div>
+
+            <div class="checklist" id="gh-checks"></div>
+
+            <div class="divider"></div>
+
+            <div id="gh-solidity-row" style="display:none;">
+              <label>Solidity version</label>
+              <code id="gh-solidity" style="font-family:var(--mono);font-size:.8rem;color:var(--dim);"></code>
+            </div>
+          </div>
+        </div>
+
+        <div id="gh-files-wrap" class="hidden card">
+          <div class="card-header"><span class="card-label">Solidity files (sample)</span></div>
+          <div class="card-body">
+            <div id="gh-files" style="font-family:var(--mono);font-size:.76rem;color:var(--dim);line-height:2;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /github -->
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast">Copied to clipboard</div>
+
+<script>
+// ── Config ───────────────────────────────────────────────────────────────────
+const API = (window.__OPKMD_API || '').replace(/\/$/, '') || 'http://localhost:8000';
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
+
+function toast(msg = 'Copied!') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function copyText(text) {
+  navigator.clipboard?.writeText(text).then(() => toast()).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    toast();
+  });
+}
+
+function setLoading(btnId, iconId, loading) {
+  const btn = $(btnId);
+  btn.disabled = loading;
+  if (loading) {
+    $(iconId).innerHTML = '<span class="loader"></span>';
+  } else {
+    // restore original icon via dataset
+    $(iconId).innerHTML = btn.dataset.icon || '';
+  }
+}
+
+// Store original icons
+document.querySelectorAll('[id$="-btn"]').forEach(btn => {
+  const iconEl = document.getElementById(btn.id + '-icon');
+  if (iconEl) btn.dataset.icon = iconEl.innerHTML;
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Output sub-tabs ───────────────────────────────────────────────────────────
+let outData = {};
+document.querySelectorAll('.out-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.out-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const key = btn.dataset.out;
+    $('gen-code').textContent = outData[key] || '';
+    $('gen-code-lang').textContent = key === 'contract' ? currentLang : 'solidity';
+  });
+});
+
+let currentLang = 'solidity';
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+const TEMPLATES = {
+  erc20:    "A mintable, burnable ERC-20 token with Permit (EIP-2612), Snapshot for governance, a 1% transfer fee sent to a treasury address, and capped at 100 million tokens. Include NatSpec and access control.",
+  erc721:   "An ERC-721A NFT collection called CryptoCreatures. Max supply 10,000, mint price 0.05 ETH. Two phases: allowlist with Merkle proof (max 2 per wallet) then public sale (max 5 per tx). Royalties via EIP-2981 at 5%. Reveal mechanism with placeholder URI.",
+  vault:    "An ERC-4626 yield vault that accepts USDC as the underlying asset. Deploys deposited funds to Aave v3 to earn yield. 2% annualised performance fee on profits, 0.1% withdrawal fee. Emergency pause, owner-controlled strategy, slippage protection.",
+  staking:  "A staking contract where users stake an ERC-20 governance token and earn USDC rewards at a configurable rate. Supports: 30/90/180-day lock periods with multipliers, compound function, emergency unstake with 10% penalty, and a boost for NFT holders.",
+  dao:      "A full DAO governance system using OpenZeppelin Governor with TimelockController. Voting token is an external ERC-20Votes. Voting delay 1 block, period 50,400 blocks (~1 week). Quorum 4%. Proposal threshold 100,000 tokens. Include a guardian multisig with CANCELLER_ROLE.",
+  multisig: "A 2-of-3 multisig wallet supporting ETH and ERC-20 transfers. Owners can propose, confirm, execute, and revoke transactions. 24-hour timelock for transfers exceeding 10 ETH. Owner rotation via add/removeOwner proposals. Event emission on all state changes.",
+  amm:      "A Uniswap V2-style AMM pair contract implementing the constant-product formula (x*y=k). 0.3% swap fee, LP token minting/burning, flash loans, TWAP price accumulators, and protection against flash-loan price manipulation.",
+};
+
+document.querySelectorAll('.template-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $('gen-desc').value = TEMPLATES[btn.dataset.tpl] || '';
+    $('gen-desc').focus();
+  });
+});
+
+// ── GENERATE ──────────────────────────────────────────────────────────────────
+$('gen-btn').addEventListener('click', async () => {
+  const desc = $('gen-desc').value.trim();
+  if (!desc) { $('gen-desc').focus(); return; }
+
+  currentLang = $('gen-lang').value;
+  setLoading('gen-btn', 'gen-btn-icon', true);
+  hide('gen-output');
+  hide('gen-warnings');
+  show('gen-loading');
+
+  try {
+    const resp = await fetch(`${API}/v1/codegen/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: desc,
+        language: currentLang,
+        framework: $('gen-fw').value,
+        include_tests: $('gen-tests').checked,
+        include_docs: true,
+        include_deploy_script: $('gen-deploy').checked,
+        gas_optimize: $('gen-gas').checked,
+      }),
+    });
+
+    const data = await resp.json();
+    outData = {};
+
+    if (data.code)    outData.contract = data.code;
+    if (data.tests)   outData.tests    = data.tests;
+    if (data.deploy_script) outData.deploy = data.deploy_script;
+
+    // Activate default output tab
+    document.querySelectorAll('.out-tab').forEach(b => b.classList.remove('active'));
+    document.querySelector('.out-tab[data-out="contract"]').classList.add('active');
+
+    // Show/hide output sub-tabs
+    $('out-tab-tests').classList.toggle('hidden', !data.tests);
+    $('out-tab-deploy').classList.toggle('hidden', !data.deploy_script);
+
+    $('gen-code-lang').textContent = currentLang;
+    $('gen-code').textContent = outData.contract || '// No output';
+
+    // Warnings
+    if (data.warnings?.length) {
+      $('gen-warnings-text').textContent = data.warnings.join(' · ');
+      show('gen-warnings');
+    }
+
+    hide('gen-loading');
+    show('gen-output');
+  } catch (err) {
+    hide('gen-loading');
+    // Offline demo — show placeholder
+    outData.contract = demoContract(desc, currentLang);
+    $('gen-code-lang').textContent = currentLang;
+    $('gen-code').textContent = outData.contract;
+    $('gen-warnings-text').textContent = 'API not reachable — showing demo output.';
+    show('gen-warnings');
+    show('gen-output');
+  }
+
+  setLoading('gen-btn', 'gen-btn-icon', false);
+});
+
+$('gen-clear').addEventListener('click', () => {
+  $('gen-desc').value = '';
+  hide('gen-output');
+  hide('gen-loading');
+});
+
+$('gen-copy').addEventListener('click', () => {
+  copyText($('gen-code').textContent);
+});
+
+// ── AUDIT ─────────────────────────────────────────────────────────────────────
+const AUDIT_SAMPLE = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.7.6;
+
+contract VulnerableBank {
+    mapping(address => uint256) public balances;
+    address public owner;
+
+    constructor() { owner = tx.origin; }
+
+    function deposit() external payable {
+        balances[msg.sender] += msg.value;
+    }
+
+    function withdraw(uint256 amount) external {
+        require(balances[msg.sender] >= amount, "Insufficient");
+        (bool ok,) = msg.sender.call{value: amount}("");
+        require(ok, "Transfer failed");
+        balances[msg.sender] -= amount;
+    }
+
+    function emergencyExit() external {
+        require(msg.sender == owner, "Not owner");
+        selfdestruct(payable(owner));
+    }
+
+    function loop(address[] calldata users) external view returns (uint256 total) {
+        for (uint256 i = 0; i < users.length; i++) {
+            total += balances[users[i]];
+        }
+    }
+}`;
+
+$('audit-sample').addEventListener('click', () => {
+  $('audit-src').value = AUDIT_SAMPLE;
+});
+
+$('audit-btn').addEventListener('click', async () => {
+  const src = $('audit-src').value.trim();
+  if (!src) { $('audit-src').focus(); return; }
+
+  setLoading('audit-btn', 'audit-btn-icon', true);
+  hide('audit-result');
+  show('audit-loading');
+
+  try {
+    const resp = await fetch(`${API}/v1/audit/source`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source: src,
+        chain: $('audit-chain').value,
+        network: $('audit-net').value,
+      }),
+    });
+
+    let data;
+    if (!resp.ok) {
+      // 422 means blocked
+      const err = await resp.json();
+      data = err.detail || {};
+      renderAudit({
+        score: data.score || 0,
+        risk_label: data.risk_label || 'CRITICAL_RISK',
+        blocks_deploy: true,
+        summary: { critical:0,high:0,medium:0,low:0,gas_optimizations:0 },
+        findings: data.findings || [],
+        gas_optimizations: [],
+      });
+    } else {
+      data = await resp.json();
+      renderAudit(data);
+    }
+  } catch (_) {
+    // Offline — run local static checks
+    renderAudit(localAudit($('audit-src').value));
+  }
+
+  hide('audit-loading');
+  show('audit-result');
+  setLoading('audit-btn', 'audit-btn-icon', false);
+});
+
+function renderAudit(data) {
+  const score = data.score ?? 0;
+  const circ  = 2 * Math.PI * 32;          // circumference
+  const arc   = $('score-arc');
+  arc.style.strokeDashoffset = circ - (circ * score / 100);
+  arc.style.stroke = score >= 75 ? '#4ade80' : score >= 60 ? '#facc15' : '#f87171';
+
+  $('score-val').textContent   = score;
+  $('score-label').textContent = (data.risk_label || '').replace(/_/g, ' ');
+  $('score-sub').textContent   = scoreExplain(score);
+
+  $('deploy-notice').innerHTML = data.blocks_deploy
+    ? '<span class="notice notice-danger" style="display:inline-flex;">⛔ Deployment blocked</span>'
+    : '<span class="notice notice-safe"  style="display:inline-flex;">✅ Passes audit threshold</span>';
+
+  const s = data.summary || {};
+  $('stat-crit').textContent = s.critical ?? countSev(data.findings,'critical');
+  $('stat-high').textContent = s.high     ?? countSev(data.findings,'high');
+  $('stat-med' ).textContent = s.medium   ?? countSev(data.findings,'medium');
+  $('stat-low' ).textContent = s.low      ?? countSev(data.findings,'low');
+  $('stat-gas' ).textContent = s.gas_optimizations ?? (data.gas_optimizations||[]).length;
+
+  // Findings
+  const fl = $('findings-list');
+  fl.innerHTML = '';
+  (data.findings || []).forEach(f => {
+    fl.appendChild(makeFinding(f));
+  });
+  (data.findings||[]).length ? show('findings-wrap') : hide('findings-wrap');
+
+  // Gas
+  const gl = $('gas-list');
+  gl.innerHTML = '';
+  (data.gas_optimizations || []).forEach(g => {
+    const el = document.createElement('div');
+    el.className = 'finding';
+    el.innerHTML = `
+      <div class="finding-head">
+        <span class="badge badge-gas">GAS</span>
+        <span class="finding-name">${g.rule || g.description}</span>
+        ${g.savings_estimate ? `<span class="finding-loc">${g.savings_estimate}</span>` : ''}
+      </div>
+      <div class="finding-desc">${g.description || ''}</div>`;
+    gl.appendChild(el);
+  });
+  (data.gas_optimizations||[]).length ? show('gas-wrap') : hide('gas-wrap');
+}
+
+function makeFinding(f) {
+  const el = document.createElement('div');
+  el.className = 'finding';
+  el.dataset.sev = f.severity || 'info';
+  el.innerHTML = `
+    <div class="finding-head">
+      <span class="badge badge-${f.severity || 'info'}">${(f.severity||'info').toUpperCase()}</span>
+      <span class="finding-name">${f.name || ''}</span>
+      ${f.line ? `<span class="finding-loc">${f.location ? f.location.split('/').pop() : ''}:${f.line}</span>` : ''}
+    </div>
+    <div class="finding-desc">${f.description || ''}</div>
+    ${f.recommendation ? `<div class="finding-rec">→ ${f.recommendation}</div>` : ''}`;
+  return el;
+}
+
+function countSev(findings, sev) {
+  return (findings||[]).filter(f=>f.severity===sev).length;
+}
+
+function scoreExplain(score) {
+  if (score >= 90) return 'No significant issues detected.';
+  if (score >= 75) return 'Minor issues — review before deployment.';
+  if (score >= 60) return 'Medium-risk — address high severity findings.';
+  if (score >= 40) return 'High-risk — deployment strongly discouraged.';
+  return 'Critical vulnerabilities — deployment blocked.';
+}
+
+// ── LOCAL STATIC AUDIT (offline fallback) ─────────────────────────────────────
+function localAudit(src) {
+  const lines = src.split('\n');
+  const findings = [];
+  const gas_opts = [];
+
+  const checks = [
+    [/\.call\{value/, 'critical', 'Potential Reentrancy', 'External call with value before state update. Apply ReentrancyGuard.', 'Use CEI pattern or nonReentrant modifier.'],
+    [/tx\.origin/,    'high',     'tx.origin Authentication', 'tx.origin is vulnerable to phishing attacks.', 'Replace with msg.sender.'],
+    [/selfdestruct\(/, 'critical', 'Selfdestruct', 'selfdestruct can drain contract balance.', 'Remove or protect with strict access control.'],
+    [/delegatecall\(/, 'high',    'Unsafe Delegatecall', 'delegatecall in caller\'s context — validate target.', 'Whitelist target addresses.'],
+    [/block\.timestamp/, 'medium', 'Timestamp Dependence', 'Block timestamp can be slightly manipulated.', 'Avoid for randomness.'],
+    [/pragma solidity (?:\^0\.[567]|0\.[567])/, 'high', 'Old Solidity Version', 'Version lacks built-in overflow protection.', 'Upgrade to 0.8.24+.'],
+  ];
+
+  const gasChecks = [
+    [/require\(.*,"/, 'use_custom_errors', 'Replace require string with custom error', '~50 gas/revert'],
+    [/\.length\b.*for|for.*\.length/, 'cache_array_length', 'Cache array length before loop', '~100 gas/iter'],
+    [/i\+\+/, 'unchecked_increment', 'Use unchecked { ++i; } in loop', '~50 gas/iter'],
+  ];
+
+  const seen = new Set();
+  lines.forEach((line, i) => {
+    checks.forEach(([pat, sev, name, desc, rec]) => {
+      if (pat.test(line) && !seen.has(name)) {
+        seen.add(name);
+        findings.push({ severity: sev, name, description: desc, recommendation: rec, location: 'input.sol', line: i+1 });
+      }
+    });
+    gasChecks.forEach(([pat, rule, desc, savings]) => {
+      if (pat.test(line) && !gas_opts.find(g=>g.rule===rule)) {
+        gas_opts.push({ rule, description: desc, savings_estimate: savings, line: i+1 });
+      }
+    });
+  });
+
+  const weights = { critical:40, high:20, medium:10, low:3 };
+  let deduct = 0;
+  findings.forEach(f => deduct += (weights[f.severity] || 0));
+  const score = Math.max(0, 100 - deduct);
+
+  const label = score >= 90 ? 'SAFE' : score >= 75 ? 'LOW_RISK' : score >= 60 ? 'MEDIUM_RISK' : score >= 40 ? 'HIGH_RISK' : 'CRITICAL_RISK';
+
+  return { score, risk_label: label, blocks_deploy: score < 60, findings, gas_optimizations: gas_opts };
+}
+
+// ── REVIEW ────────────────────────────────────────────────────────────────────
+$('rev-btn').addEventListener('click', async () => {
+  const src = $('rev-src').value.trim();
+  if (!src) { $('rev-src').focus(); return; }
+
+  setLoading('rev-btn', 'rev-btn-icon', true);
+  hide('rev-output');
+  show('rev-loading');
+
+  try {
+    const resp = await fetch(`${API}/v1/codegen/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: src, language: $('rev-lang').value }),
+    });
+    const data = await resp.json();
+    $('rev-text').textContent = data.review || 'No review returned.';
+  } catch (_) {
+    $('rev-text').textContent = demoReview(src);
+  }
+
+  hide('rev-loading');
+  show('rev-output');
+  setLoading('rev-btn', 'rev-btn-icon', false);
+});
+
+$('rev-copy').addEventListener('click', () => {
+  copyText($('rev-text').textContent);
+});
+
+// ── GITHUB ────────────────────────────────────────────────────────────────────
+$('gh-btn').addEventListener('click', async () => {
+  const repo = $('gh-repo').value.trim();
+  if (!repo.includes('/')) { $('gh-repo').focus(); return; }
+
+  setLoading('gh-btn', 'gh-btn-icon', true);
+  hide('gh-result');
+  show('gh-loading');
+
+  try {
+    const resp = await fetch(`${API}/v1/github/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo }),
+    });
+    const data = await resp.json();
+    renderGithub(data, repo);
+  } catch (_) {
+    renderGithub(demoGithub(repo), repo);
+  }
+
+  hide('gh-loading');
+  show('gh-result');
+  setLoading('gh-btn', 'gh-btn-icon', false);
+});
+
+function renderGithub(data, repoName) {
+  $('gh-name-lbl').textContent = repoName;
+  $('gh-fw').textContent      = data.framework || 'unknown';
+  $('gh-chain').textContent   = data.chain     || 'unknown';
+  $('gh-contracts').textContent  = data.total_contracts || 0;
+  $('gh-complexity').textContent = `${data.complexity_score || 0}/10`;
+
+  const checks = $('gh-checks');
+  checks.innerHTML = '';
+  const items = [
+    [data.has_tests,  '✅', '❌', 'Test suite present'],
+    [data.has_ci,     '✅', '❌', 'CI/CD configured'],
+    [data.has_audits, '✅', '❌', 'Audit reports present'],
+  ];
+  items.forEach(([val, ok, no, lbl]) => {
+    const el = document.createElement('div');
+    el.className = 'check-item';
+    el.innerHTML = `<span class="check-icon">${val ? ok : no}</span><span style="font-size:.82rem;">${lbl}</span>`;
+    checks.appendChild(el);
+  });
+
+  if (data.solidity_version) {
+    $('gh-solidity').textContent = data.solidity_version;
+    $('gh-solidity-row').style.display = 'block';
+  } else {
+    $('gh-solidity-row').style.display = 'none';
+  }
+
+  const files = data.sol_files || [];
+  if (files.length) {
+    $('gh-files').innerHTML = files.slice(0,12).map(f=>`<div>${f}</div>`).join('');
+    show('gh-files-wrap');
+  } else {
+    hide('gh-files-wrap');
+  }
+}
+
+// ── Demo / offline fallbacks ──────────────────────────────────────────────────
+function demoContract(desc, lang) {
+  return `// SPDX-License-Identifier: MIT
+// Generated by Op-Kingmd (demo — connect API for real output)
+pragma solidity ^0.8.24;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+/// @title Generated Contract
+/// @notice ${desc.slice(0, 80)}
+contract GeneratedContract is ERC20, Ownable, ReentrancyGuard {
+    uint256 public immutable maxSupply;
+
+    error ExceedsMaxSupply();
+    error ZeroAddress();
+
+    event TokensMinted(address indexed to, uint256 amount);
+
+    constructor(uint256 _maxSupply, address _owner)
+        ERC20("GeneratedToken", "GEN")
+        Ownable(_owner)
+    {
+        if (_owner == address(0)) revert ZeroAddress();
+        maxSupply = _maxSupply;
+        _mint(_owner, _maxSupply / 2);
+    }
+
+    function mint(address to, uint256 amount) external onlyOwner nonReentrant {
+        if (totalSupply() + amount > maxSupply) revert ExceedsMaxSupply();
+        _mint(to, amount);
+        emit TokensMinted(to, amount);
+    }
+}`;
+}
+
+function demoReview(src) {
+  return `## Summary
+
+Contract reviewed for security vulnerabilities and code quality.
+
+## Critical Issues
+
+None detected in initial scan.
+
+## High Issues
+
+- Review access control on all external functions
+- Ensure ReentrancyGuard is applied to functions moving funds
+
+## Medium Issues
+
+- Consider replacing \`require\` strings with custom errors for gas savings
+- Validate all address parameters are non-zero
+
+## Low Issues
+
+- Add NatSpec documentation to all public functions
+- Use \`unchecked { ++i; }\` in for-loops (Solidity 0.8+)
+
+## Gas Optimizations
+
+- Cache frequently-read storage variables in local memory
+- Use \`immutable\` for values set in constructor and never changed
+
+## Recommendations
+
+1. Add comprehensive Foundry tests covering edge cases
+2. Run Slither static analyzer before deployment
+3. Consider a professional audit for mainnet deployment
+
+_Demo review — connect to Op-Kingmd API for AI-powered analysis._`;
+}
+
+function demoGithub(repo) {
+  return {
+    full_name: repo,
+    framework: 'foundry',
+    chain: 'ethereum',
+    solidity_version: '^0.8.24',
+    total_contracts: 12,
+    has_tests: true,
+    has_ci: true,
+    has_audits: false,
+    complexity_score: 6,
+    oz_version: '5.x',
+    sol_files: ['src/Token.sol','src/Vault.sol','src/Governance.sol','test/Token.t.sol'],
+  };
+}
+</script>
+</body>
+</html>
